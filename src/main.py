@@ -1,6 +1,6 @@
-"""
-This module takes care of starting the API Server, Loading the DB and Adding the endpoints
-"""
+
+# This module takes care of starting the API Server, Loading the DB and Adding the endpoints
+
 import os
 from flask import Flask, request, jsonify, url_for
 from flask_migrate import Migrate
@@ -9,7 +9,9 @@ from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
 from models import db, User
-#from models import Person
+from datastructures import Queue
+from sms import send
+
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
@@ -19,6 +21,8 @@ MIGRATE = Migrate(app, db)
 db.init_app(app)
 CORS(app)
 setup_admin(app)
+
+queue = Queue()
 
 # Handle/serialize errors like a JSON object
 @app.errorhandler(APIException)
@@ -30,14 +34,24 @@ def handle_invalid_usage(error):
 def sitemap():
     return generate_sitemap(app)
 
-@app.route('/user', methods=['GET'])
-def handle_hello():
+@app.route('/queue')
+def print_queue():
+    tmp_queue = queue.get_queue()
+    return jsonify(tmp_queue), 200
 
-    response_body = {
-        "msg": "Hello, this is your GET /user response "
-    }
+@app.route('/queue', methods=['POST'])
+def add():
+    guest = request.json
+    queue.enqueue(guest)
+    tmp_queue = queue.get_queue()
+    return jsonify(tmp_queue), 200
 
-    return jsonify(response_body), 200
+@app.route('/queue', methods=['DELETE'])
+def dequeue():
+    call_person = queue.dequeue()
+    phone = call_person['number']
+    send(body='Your table is ready', to=phone)
+    return jsonify(f"Texted {call_person['name']} at {call_person['number']}."), 200    
 
 # this only runs if `$ python src/main.py` is executed
 if __name__ == '__main__':
